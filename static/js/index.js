@@ -29,17 +29,45 @@ $(document).ready(function() {
 
     });
 
-    var options = {
-			slidesToScroll: 1,
-			slidesToShow: 3,
-			loop: true,
-			infinite: true,
-			autoplay: false,
-			autoplaySpeed: 3000,
-    }
+    var baseCarouselOptions = {
+				slidesToScroll: 1,
+				slidesToShow: 3,
+				loop: true,
+				infinite: true,
+				autoplay: false,
+				autoplaySpeed: 3000,
+    };
 
-		// Initialize all div with carousel class
-    var carousels = bulmaCarousel.attach('.carousel', options);
+    var primaryCarousel = bulmaCarousel.attach('#results-carousel', baseCarouselOptions) || [];
+    var llmCarousel = bulmaCarousel.attach('#llm-results-carousel', {
+        slidesToScroll: 1,
+        slidesToShow: 2,
+        loop: true,
+        infinite: true,
+        autoplay: false,
+        autoplaySpeed: 3000,
+        breakpoints: [
+          { changePoint: 480, slidesToShow: 1, slidesToScroll: 1 },
+          { changePoint: 768, slidesToShow: 2, slidesToScroll: 1 },
+          { changePoint: 1024, slidesToShow: 2, slidesToScroll: 1 }
+        ]
+    }) || [];
+    var keyboardCarousel = bulmaCarousel.attach('#keyboard-results-carousel', {
+        slidesToScroll: 1,
+        slidesToShow: 2,
+        loop: true,
+        infinite: true,
+        autoplay: false,
+        autoplaySpeed: 3000,
+        breakpoints: [
+          { changePoint: 480, slidesToShow: 1, slidesToScroll: 1 },
+          { changePoint: 768, slidesToShow: 2, slidesToScroll: 1 },
+          { changePoint: 1024, slidesToShow: 2, slidesToScroll: 1 }
+        ]
+    }) || [];
+
+		// Initialize the carousels we actually use on the page
+    var carousels = primaryCarousel.concat(llmCarousel, keyboardCarousel);
 
     // Loop on each carousel initialized
     for(var i = 0; i < carousels.length; i++) {
