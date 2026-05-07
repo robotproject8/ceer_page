@@ -203,3 +203,16 @@ body {
 #interpolation-image-wrapper img {
   border-radius: 5px;
 }
+
+.author-row {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.25em;
+}
+
+@media screen and (max-width: 768px) {
+  .author-row {
+    display: inline;
+  }
+}
