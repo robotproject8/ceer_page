@@ -342,9 +342,33 @@ function tick() {
   const { xpos, xmat } = snapshotPose();
   const q = data.qpos;
   post(
-    { type: 'frame', xpos, xmat, rootX: readEl(q, 0), rootY: readEl(q, 1), rootZ: readEl(q, 2) },
+    {
+      type: 'frame',
+      xpos,
+      xmat,
+      rootX: readEl(q, 0),
+      rootY: readEl(q, 1),
+      rootZ: readEl(q, 2),
+      viz: vizPayload(),
+    },
     [xpos.buffer, xmat.buffer],
   );
+}
+
+// Command-visualization data for the main thread (root command arrow + hand
+// target frames). Everything here is the CURRENT KEYBOARD COMMAND, not physical
+// state: cmdVel is the world-frame commanded root velocity; lh/rh are the hand
+// targets in the pelvis body frame; baseQuat orients them into the world.
+function vizPayload() {
+  if (mode !== 'policy' || !teleop) return null;
+  const c = Math.cos(teleop.yaw), s = Math.sin(teleop.yaw);
+  const q = data.qpos;
+  return {
+    baseQuat: [readEl(q, 4), readEl(q, 5), readEl(q, 6), readEl(q, 3)], // xyzw
+    cmdVel: [c * teleop.vx - s * teleop.vy, s * teleop.vx + c * teleop.vy], // world xy
+    lh: [teleop.lh[0], teleop.lh[1], teleop.lh[2]],
+    rh: [teleop.rh[0], teleop.rh[1], teleop.rh[2]],
+  };
 }
 
 function setStepping(on) {

@@ -81,6 +81,21 @@ const reflector = new Reflector(new THREE.PlaneGeometry(120, 120), {
 reflector.position.z = 0.0;
 scene.add(reflector);
 
+// --- command visualization (mirrors the deploy debug viz) ------------------
+// Yellow root command arrow (direction + speed of the keyboard root command) and
+// RGB coordinate frames at the left/right hand TARGET poses. Driven per-frame by
+// the worker's `viz` payload (the current command, not physical state).
+const rootArrow = new THREE.ArrowHelper(
+  new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 0.3, 0xffcc22, 0.12, 0.08,
+);
+rootArrow.visible = false;
+scene.add(rootArrow);
+const lhAxes = new THREE.AxesHelper(0.14);
+const rhAxes = new THREE.AxesHelper(0.14);
+lhAxes.visible = rhAxes.visible = false;
+scene.add(lhAxes);
+scene.add(rhAxes);
+
 // --- sim worker ------------------------------------------------------------
 let sceneHandle = null; // { group, geomObjects }
 
@@ -112,6 +127,7 @@ worker.onmessage = (ev) => {
         if (typeof msg.rootY === 'number') window.__ceer.rootY = msg.rootY;
       }
       updateHud(msg.rootZ);
+      updateViz(msg.viz, msg.rootX, msg.rootY, msg.rootZ);
       break;
     case 'error':
       onError(msg.message);
@@ -180,6 +196,43 @@ if (stepToggle) {
 
 if (resetBtn) {
   resetBtn.addEventListener('click', () => worker.postMessage({ type: 'reset' }));
+}
+
+// Command visualization: yellow root arrow + hand target frames. Mirrors the
+// deploy debug_viz (EMA-smoothed command speed → arrow length/direction; hand
+// RGB frames at root_pos + baseQuat·handTargetBody).
+const _vizQ = new THREE.Quaternion();
+const _vizV = new THREE.Vector3();
+const _vizEma = new THREE.Vector2(0, 0);
+function updateViz(viz, rx, ry, rz) {
+  if (!viz) {
+    rootArrow.visible = false;
+    lhAxes.visible = rhAxes.visible = false;
+    return;
+  }
+  // root command arrow (world XY), EMA-smoothed like the deploy viewer
+  _vizEma.set(0.6 * _vizEma.x + 0.4 * viz.cmdVel[0], 0.6 * _vizEma.y + 0.4 * viz.cmdVel[1]);
+  const speed = _vizEma.length();
+  if (speed > 0.05) {
+    const len = Math.min(0.8, Math.max(0.2, 0.2 + 0.14 * speed));
+    rootArrow.position.set(rx, ry, rz + 0.12);
+    rootArrow.setDirection(_vizV.set(_vizEma.x, _vizEma.y, 0).normalize());
+    rootArrow.setLength(len, len * 0.32, len * 0.2);
+    rootArrow.visible = true;
+  } else {
+    rootArrow.visible = false;
+  }
+  // hand target frames: world pos = root + baseQuat·(hand target in body frame),
+  // oriented like the base (keyboard teleop keeps hands unrotated).
+  _vizQ.set(viz.baseQuat[0], viz.baseQuat[1], viz.baseQuat[2], viz.baseQuat[3]);
+  placeAxes(lhAxes, viz.lh, rx, ry, rz);
+  placeAxes(rhAxes, viz.rh, rx, ry, rz);
+}
+function placeAxes(axes, body, rx, ry, rz) {
+  _vizV.set(body[0], body[1], body[2]).applyQuaternion(_vizQ);
+  axes.position.set(rx + _vizV.x, ry + _vizV.y, rz + _vizV.z);
+  axes.quaternion.copy(_vizQ);
+  axes.visible = true;
 }
 
 // HUD: root height + control-loop fps (frame messages arrive at the sim rate).
