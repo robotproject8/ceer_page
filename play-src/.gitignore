@@ -1,4 +1,0 @@
-node_modules/
-dist/
-# large, regenerable test fixtures (produced by ceer_deploy/scripts/*.py)
-test/
