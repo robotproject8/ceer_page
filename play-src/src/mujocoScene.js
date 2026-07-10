@@ -87,9 +87,9 @@ function geometryForGeom(g, resolveMesh) {
 
   switch (g.type) {
     case mjGEOM.PLANE:
-      // size may be 0 (infinite). Use a large finite plane in the geom's frame.
-      geometry = new THREE.PlaneGeometry(40, 40, 1, 1);
-      break;
+      // The ground is rendered by main.js as a reflective floor (three Reflector),
+      // so skip the MuJoCo floor plane here to avoid a double / z-fighting surface.
+      return null;
     case mjGEOM.SPHERE:
       geometry = new THREE.SphereGeometry(size[0], 24, 16);
       break;
@@ -145,6 +145,11 @@ export function buildThreeSceneFromData(payload) {
 
   for (let i = 0; i < geoms.length; i++) {
     const g = geoms[i];
+    // Skip the deploy-only debug visualization markers: geoms on mocap bodies
+    // (coordinate-frame axes, target sphere/arrow) plus any viz_* named geom. In
+    // the Python viewer these are mocap-driven to show target poses; here they'd
+    // just be stray colored sticks near the robot.
+    if (g.mocap || (g.name && g.name.startsWith('viz_'))) continue;
     const built = geometryForGeom(g, resolveMesh);
     if (!built) continue;
 
@@ -161,7 +166,7 @@ export function buildThreeSceneFromData(payload) {
       metalness: 0.05,
       transparent: rgba[3] < 1,
       opacity: rgba[3],
-      side: g.type === mjGEOM.PLANE ? THREE.DoubleSide : THREE.FrontSide,
+      side: THREE.FrontSide,
     });
 
     const obj = new THREE.Mesh(geometry, material);

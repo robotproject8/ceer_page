@@ -267,9 +267,13 @@ function extractRenderModel() {
   const meshes = {}; // dataid -> { positions, indices }
   const transfer = [];
 
+  // body_mocapid[bodyid] >= 0 marks a mocap body — in this scene those hold the
+  // deploy-only debug viz markers (coordinate-frame axes, target sphere/arrow).
+  const bodyMocapId = model.body_mocapid;
   for (let i = 0; i < ngeom; i++) {
     const g = model.geom(i);
     const dataid = g.dataid;
+    const mocap = bodyMocapId ? readEl(bodyMocapId, g.bodyid) >= 0 : false;
     geoms[i] = {
       type: g.type,
       size: [readEl(g.size, 0), readEl(g.size, 1), readEl(g.size, 2)],
@@ -277,6 +281,7 @@ function extractRenderModel() {
       dataid,
       bodyid: g.bodyid,
       name: g.name || '',
+      mocap,
     };
     if (g.type === MESH_GEOM_TYPE && dataid >= 0 && !(dataid in meshes)) {
       const m = extractMesh(dataid);

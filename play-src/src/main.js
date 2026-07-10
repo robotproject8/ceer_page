@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { buildThreeSceneFromData, syncFromArrays } from './mujocoScene.js';
 
 const appEl = document.getElementById('app');
@@ -21,11 +22,15 @@ let _fpsCount = 0, _fpsLast = 0, _fpsTimer = 0;
 
 // --- three.js core ---------------------------------------------------------
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x12151c);
+// Deep-blue vertical gradient backdrop (Gentle-Humanoid style).
+scene.background = makeGradientBackground();
 
-const camera = new THREE.PerspectiveCamera(50, aspect(), 0.01, 1000);
+// Cinematic 3/4 view of the robot + the table/box it works with, +Z up. Kept a
+// bit elevated so the front table doesn't occlude the robot (our scene, unlike
+// Gentle Humanoid's empty floor, has furniture).
+const camera = new THREE.PerspectiveCamera(45, aspect(), 0.02, 1000);
 camera.up.set(0, 0, 1); // MuJoCo / robot world is +Z up
-camera.position.set(2.4, -2.4, 1.6);
+camera.position.set(2.8, -3.2, 1.8);
 
 // WebGL may be unavailable (e.g. headless test browsers with no GPU context).
 // Wrap creation so a failure only disables rendering — the worker/sim path and
@@ -42,7 +47,11 @@ try {
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
-  controls.target.set(0, 0, 0.8); // roughly the robot torso height
+  controls.target.set(0, 0, 0.72); // orbit around the robot's mid-body
+  controls.minDistance = 1.6;
+  controls.maxDistance = 12;
+  // Keep the camera above the ground (never orbit under the floor).
+  controls.maxPolarAngle = Math.PI * 0.5 - 0.04;
   controls.update();
 } catch (err) {
   console.warn('[viewer] WebGL unavailable — rendering disabled, sim still runs:', err);
@@ -59,10 +68,18 @@ const fill = new THREE.DirectionalLight(0xffffff, 0.5);
 fill.position.set(-3, 3, 2);
 scene.add(fill);
 
-// Ground reference grid (+Z up: rotate the default XZ grid into the XY plane).
-const grid = new THREE.GridHelper(20, 20, 0x444a55, 0x2a2e37);
-grid.rotation.x = Math.PI / 2;
-scene.add(grid);
+// Reflective blue floor (Gentle-Humanoid style): a mirror that reflects the
+// robot, tinted/dimmed to a dark steel-blue. Replaces both the grid and the
+// MuJoCo floor plane (mujocoScene.js skips the plane geom). PlaneGeometry lies in
+// XY with +Z normal — exactly our ground plane, so no rotation needed.
+const reflector = new Reflector(new THREE.PlaneGeometry(120, 120), {
+  color: 0x30414f, // dims + tints the reflection toward a subtle steel blue
+  textureWidth: Math.min(2048, window.innerWidth * window.devicePixelRatio),
+  textureHeight: Math.min(2048, window.innerHeight * window.devicePixelRatio),
+  clipBias: 0.003,
+});
+reflector.position.z = 0.0;
+scene.add(reflector);
 
 // --- sim worker ------------------------------------------------------------
 let sceneHandle = null; // { group, geomObjects }
@@ -114,7 +131,9 @@ function onReady(msg) {
   try {
     sceneHandle = buildThreeSceneFromData(msg);
     scene.add(sceneHandle.group);
-    frameSceneToContent(sceneHandle.group);
+    // Camera stays framed on the robot (target set at init); do NOT retarget to
+    // the whole-scene bounding box — the 40 m floor plane skews its center and
+    // sends the orbit pivot off toward/under the ground.
 
     statusEl.classList.add('hidden');
     overlayEl.hidden = false;
@@ -210,14 +229,22 @@ function aspect() {
   return window.innerWidth / window.innerHeight;
 }
 
-function frameSceneToContent(group) {
-  if (!controls) return;
-  const box = new THREE.Box3().setFromObject(group);
-  if (!box.isEmpty()) {
-    const center = box.getCenter(new THREE.Vector3());
-    controls.target.copy(center);
-    controls.update();
-  }
+// Vertical deep-blue gradient used as the scene backdrop (and, via the Reflector
+// reading scene.background, the empty-floor reflection colour).
+function makeGradientBackground() {
+  const cv = document.createElement('canvas');
+  cv.width = 4;
+  cv.height = 256;
+  const ctx = cv.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0.0, '#0a1524'); // dark navy top
+  g.addColorStop(0.55, '#1c3a55'); // mid blue
+  g.addColorStop(1.0, '#2c4a66'); // lighter steel-blue toward the horizon
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 4, 256);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 window.addEventListener('resize', () => {
